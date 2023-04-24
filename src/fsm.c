@@ -14,6 +14,7 @@ typedef enum{ 		// TODO: define states for manual mode here
 } ManuState_t;
 
 
+
 typedef union {// TODO: define an input type for manual mode here
 
 	struct {		 //brauchen wir da lb? komplett raus oder?
@@ -101,9 +102,9 @@ static Actuators_t doManualCycle(Sensors_t sensors, int doInit) {
 
 // states
 typedef enum{
-	Bew_ohneLS, Lichtschranke, // TODO: add states here
-	Ruhe,
-	Auto_Initial // = Geschlossen
+	open, close, // TODO: add states here
+	sleep,
+	 // = Geschlossen
 } AutoState_t;
 
 // These are the FSM inputs (do not mix up with system input type Sensors_t!)
@@ -120,15 +121,13 @@ typedef union {
 static const struct { 
 	AutoState_t nextState;	
 	Actuators_t output;
-} autoTable[4]/*Anzahl Zustände*/ [8]/*Anzahl Eingangsvektoren*/ = {
-	//Bew_ohneLS
-	{{Bew_ohneLS,{{1,1,0}}},		{Bew_ohneLS,{{0,0,1}}},			{Ruhe,{{0,0,0}}}, 			{Bew_ohneLS,{{0,0,0}}},/*Fehler*/		{Ruhe,{{0,0,0}}},		{Lichtschranke,{{0,0,0,}}},	{Bew_ohneLS,{{0,0,0}}},/*Fehler*/	{Bew_ohneLS,{{0,0,0}}}/*Fehler*/},
-	//Lichtschranke
-	{{Bew_ohneLS,{{0,0,1}}},		{Lichtschranke,{{0,0,1}}},		{Lichtschranke,{{0,0,1}}}, 	{Lichtschranke,{{0,0,0}}},/*Fehler*/	{Ruhe,{{0,0,0}}},		{Lichtschranke,{{0,0,0}}},	{Lichtschranke,{{0,0,0}}},/*Fehler*/{Lichtschranke,{{0,0,0}}}/*Fehler*/},
-	//Ruhe
-	{{Ruhe,{{0,0,0}}},/*Fehler*/ 	{Ruhe,{{0,0,0}}},/*Fehler*/		{Ruhe,{{0,0,0}}},			{Lichtschranke,{{0,0,1}}},				{Bew_ohneLS,{{1,1,0}}},	{Lichtschranke,{{0,0,0}}},	{Ruhe,{{0,0,0}}},/*Fehler*/			{Ruhe,{{0,0,0}}}/*Fehler*/},
-	//Auto_Initial
-	{{Bew_ohneLS,{{0,0,1}}},		{Lichtschranke,{{0,0,1}}},		{Ruhe,{{0,0,1/*hier*/}}},			{Lichtschranke,{{0,0,1}}},				{Ruhe,{{0,0,1/*hier*/}}},		{Lichtschranke,{{0,0,1/*hier*/}}},	{Auto_Initial,{{0,0,0}}},/*Fehler*/	{Auto_Initial,{{0,0,0}}}/*Fehler*/}
+} autoTable[3]/*Anzahl Zustände*/ [8]/*Anzahl Eingangsvektoren*/ = {
+	//open
+	{{open,{{0,0,1}}},			{open,{{0,0,1}}},			{open,{{0,0,1}}}, {open,{{0,0,1}}},		{sleep,{{0,0,0}}},		{sleep,{{0,0,0,}}},	{open,{{0,0,0}}},/*Fehler*/	{open,{{0,0,0}}}/*Fehler*/},
+	//close
+	{{close,{{1,1,0}}},			{open,{{0,0,1}}},			{sleep,{{0,0,0}}}, 	{open,{{0,0,1}}},		{close,{{1,1,0}}},	{sleep,{{0,0,0}}},	{close,{{0,0,0}}},/*Fehler*/{close,{{0,0,0}}}/*Fehler*/},
+	//sleep
+	{{sleep,{{0,0,0}}},/*Fehler*/ 	{sleep,{{0,0,0}}},/*Fehler*/	{sleep,{{0,0,0}}},	{open,{{0,0,1}}},		{close,{{1,1,0}}},	{sleep,{{0,0,0}}},	{sleep,{{0,0,0}}},/*Fehler*/		{sleep,{{0,0,0}}}/*Fehler*/}
 };
 
 #define DOOR_CLOSE_DELAY	(5000 / FSM_INTERVAL_MS) // wait 5 seconds before closing the door
@@ -138,10 +137,11 @@ static Actuators_t doAutoCycle(Sensors_t sensors, int doInit) {
 	AutoInputs_t inputs;
 	static AutoState_t state;
 	static int closeDelayCounter;
+	
 		
 	if(doInit) {
 		closeDelayCounter = 0;
-		state = Auto_Initial;
+		state = open;
 	} 
 	
 	// fill input structure
@@ -162,6 +162,9 @@ static Actuators_t doAutoCycle(Sensors_t sensors, int doInit) {
 			actuators.single.warn_lamp = 0;
 		} 
 	} else closeDelayCounter = DOOR_CLOSE_DELAY;
+
+	//Verklemmnung detect
+	
 		
 	return actuators;
 } 
@@ -173,14 +176,38 @@ static Actuators_t doAutoCycle(Sensors_t sensors, int doInit) {
 static unsigned char errorMask;
 
 #define SENSOR_ERROR_DELAY (2000 / FSM_INTERVAL_MS) 
+static int Verklemmungscounter;
+	
 
 static unsigned char detectErrors(Sensors_t sensors, Actuators_t actuators) {
 	unsigned char mask = 0;
 	
 	if(sensors.single.limit_open && sensors.single.limit_closed) mask |= 0x1;  
-	//if((sensors.single.limit_closed || sensors.single.limit_open) && (actuators.single.motor_close||actuators.single.motor_open)) mask |= 0x2; //Endlage, aber eine Motor ist an
-
-	// TODO: handle more errors here
+	
+	if((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close)) {
+		if(Verklemmungscounter > 0) {
+			Verklemmungscounter--;	
+		} 
+		if (Verklemmungscounter==0){
+			mask |=0x2;
+						
+		}
+	if(!((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close))) {
+		Verklemmungscounter = SENSOR_ERROR_DELAY;
+	}
+	
+	}
+	
+	
+	/*if((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close)){
+		Verklemmungscounter++;
+		if( Verklemmungscounter > 0){
+		mask |= 0x1;
+	}
+	}	else Verklemmungscounter =0;*/
+	/*if((sensors.single.limit_closed) && (actuators.single.motor_close||actuators.single.motor_open)) mask |= 0x2; //Endlage, aber eine Motor ist an
+	if((sensors.single.limit_closed || sensors.single.limit_open) && (actuators.single.motor_close||actuators.single.motor_open)) mask |= 0x2; //Endlage, aber eine Motor ist an
+	*/// TODO: handle more errors here
 	
 	return mask;
 }
@@ -196,6 +223,9 @@ void FSM_Init() {
 
 Actuators_t FSM_Cycle(Sensors_t sensors) {	
 	Actuators_t actuators;
+
+	
+
 	if(sensors.single.mode_auto){
 		// automatic operating mode
 		actuators = doAutoCycle(sensors, (mode != Mode_Auto));
