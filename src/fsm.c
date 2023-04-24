@@ -103,7 +103,7 @@ static Actuators_t doManualCycle(Sensors_t sensors, int doInit) {
 // states
 typedef enum{
 	open, close, // TODO: add states here
-	sleep,
+	
 	 // = Geschlossen
 } AutoState_t;
 
@@ -121,13 +121,11 @@ typedef union {
 static const struct { 
 	AutoState_t nextState;	
 	Actuators_t output;
-} autoTable[3]/*Anzahl Zustände*/ [8]/*Anzahl Eingangsvektoren*/ = {
+} autoTable[2]/*Anzahl Zustände*/ [8]/*Anzahl Eingangsvektoren*/ = {
 	//open
-	{{open,{{0,0,1}}},			{open,{{0,0,1}}},			{open,{{0,0,1}}}, {open,{{0,0,1}}},		{sleep,{{0,0,0}}},		{sleep,{{0,0,0,}}},	{open,{{0,0,0}}},/*Fehler*/	{open,{{0,0,0}}}/*Fehler*/},
+	{{open,{{0,0,1}}},			{open,{{0,0,1}}},			{open,{{0,0,1}}}, {open,{{0,0,1}}},		{close,{{0,0,0}}},		{close,{{0,0,0,}}},	{open,{{0,0,0}}},/*Fehler*/	{open,{{0,0,0}}}/*Fehler*/},
 	//close
-	{{close,{{1,1,0}}},			{open,{{0,0,1}}},			{sleep,{{0,0,0}}}, 	{open,{{0,0,1}}},		{close,{{1,1,0}}},	{sleep,{{0,0,0}}},	{close,{{0,0,0}}},/*Fehler*/{close,{{0,0,0}}}/*Fehler*/},
-	//sleep
-	{{sleep,{{0,0,0}}},/*Fehler*/ 	{sleep,{{0,0,0}}},/*Fehler*/	{sleep,{{0,0,0}}},	{open,{{0,0,1}}},		{close,{{1,1,0}}},	{sleep,{{0,0,0}}},	{sleep,{{0,0,0}}},/*Fehler*/		{sleep,{{0,0,0}}}/*Fehler*/}
+	{{close,{{1,1,0}}},			{open,{{0,0,1}}},			{close,{{0,0,0}}}, 	{open,{{0,0,1}}},		{close,{{1,1,0}}},	{close,{{0,0,0}}},	{close,{{0,0,0}}},/*Fehler*/{close,{{0,0,0}}}/*Fehler*/}
 };
 
 #define DOOR_CLOSE_DELAY	(5000 / FSM_INTERVAL_MS) // wait 5 seconds before closing the door
@@ -184,19 +182,6 @@ static unsigned char detectErrors(Sensors_t sensors, Actuators_t actuators) {
 	
 	if(sensors.single.limit_open && sensors.single.limit_closed) mask |= 0x1;  
 	
-	if((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close)) {
-		if(Verklemmungscounter > 0) {
-			Verklemmungscounter--;	
-		} 
-		if (Verklemmungscounter==0){
-			mask |=0x2;
-						
-		}
-	if(!((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close))) {
-		Verklemmungscounter = SENSOR_ERROR_DELAY;
-	}
-	
-	}
 	
 	
 	/*if((actuators.single.motor_close && sensors.single.button_open)||(actuators.single.motor_open && sensors.single.button_close)){
