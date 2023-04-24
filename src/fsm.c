@@ -10,17 +10,17 @@ static enum {
 // manual operation mode
 ////////////////////////////////////////////////////////////////////////////////
 typedef enum{ 		// TODO: define states for manual mode here
-	ruhe, schliessen, oeffnen // = Geschlossen
+	ruhe, schliessen, oeffnen, //ManuInit // = Geschlossen
 } ManuState_t;
 
 
 typedef union {// TODO: define an input type for manual mode here
 
 	struct {		 //brauchen wir da lb? komplett raus oder?
-		unsigned char offen: 1; 		// either approximation or collision (or both) light barriers triggered		
-		unsigned char oeff: 1;	// door is closed		
-		unsigned char geschlossen: 1;		// door is open	
-		unsigned char schliessen: 1; 		// either approximation or collision (or both) light barriers triggered			
+		unsigned char schliessen: 1; 		// either approximation or collision (or both) light barriers triggered		
+		unsigned char geschlossen: 1;	// door is closed		
+		unsigned char oeff: 1;		// door is open	
+		unsigned char offen: 1; 		// either approximation or collision (or both) light barriers triggered			
 		unsigned char _reserved: 4;	// fill remaining bits to prevent compiler "optimization" writing garbage into them
 	} single;
 	unsigned char all;
@@ -30,10 +30,10 @@ typedef union {// TODO: define an input type for manual mode here
 static const struct { // TODO: insert FSM table for manual mode here
 	ManuState_t nextState;	
 	Actuators_t output;
-} ManuTable[3][16] = {
+} ManuTable[4][16] = {
 	{	//Ruhe
-		{ruhe,{{0,0,0}}/*Fehler*/},{ruhe,{{0,0,0}}/*Fehler*/}, {ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}},
-		{ruhe,{{0,0,0}}/*Fehler*/},{ruhe,{{0,0,0}}/*Fehler*/}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
+		{ruhe,{{0,0,0}}/*Fehler*/},{schliessen, {{1,1,0}}}, {ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}},
+		{oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
 		{ruhe, {{0,0,0}}}, {schliessen, {{1,1,0}}}, {ruhe,{{0,0,0}}/*Fehler*/},{ruhe,{{0,0,0}}/*Fehler*/},
 		{ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}}, {ruhe,{{0,0,0}}/*Fehler*/},{ruhe,{{0,0,0}}/*Fehler*/}
 	}	,
@@ -46,11 +46,21 @@ static const struct { // TODO: insert FSM table for manual mode here
 	}	,
 	//oeffnen
 	{
-		{oeffnen, {{0,0,1}}}, {oeffnen,{{0,0,0}}/*Fehler*/},{oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
+		{oeffnen, {{0,0,1}}}, {oeffnen,{{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
 		{oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
-		{ruhe, {{0,0,0}}}, {oeffnen,{{0,0,0}}/*Fehler*/},{oeffnen,{{0,0,0}}/*Fehler*/},{oeffnen,{{0,0,0}}/*Fehler*/},
-		{ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}}, {oeffnen,{{0,0,0}}/*Fehler*/},{oeffnen,{{0,0,0}}/*Fehler*/}
-	}
+		{ruhe, {{0,0,0}}}, {oeffnen,{{0,0,0}}/*Fehler*/},{oeffnen,{{0,0,0}}/*Fehler*/}, {oeffnen,{{0,0,0}}/*Fehler*/},
+		{ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}}, {oeffnen,{{0,0,0}}/*Fehler*/}, {oeffnen,{{0,0,0}}/*Fehler*/}
+	}	,
+	//ManuInit
+	
+	//{
+	//	{ManuInit,{{0,0,0}}/*Fehler*/},{schliessen, {{1,1,0}}}, {ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}},
+	//	{oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}}, {oeffnen, {{0,0,1}}},
+	//	{ruhe, {{0,0,0}}}, {schliessen, {{1,1,0}}}, {ManuInit,{{0,0,0}}/*Fehler*/},{ManuInit,{{0,0,0}}/*Fehler*/},
+	//	{ruhe, {{0,0,0}}}, {ruhe, {{0,0,0}}}, {ManuInit,{{0,0,0}}/*Fehler*/}, {ManuInit,{{0,0,0}}/*Fehler*/}
+//
+//	}
+	
 };
 
 
@@ -168,7 +178,7 @@ static unsigned char detectErrors(Sensors_t sensors, Actuators_t actuators) {
 	unsigned char mask = 0;
 	
 	if(sensors.single.limit_open && sensors.single.limit_closed) mask |= 0x1;  
-	if((sensors.single.limit_closed || sensors.single.limit_open) && (actuators.single.motor_close||actuators.single.motor_open)) mask |= 0x2; //Endlage, aber eine Motor ist an
+	//if((sensors.single.limit_closed || sensors.single.limit_open) && (actuators.single.motor_close||actuators.single.motor_open)) mask |= 0x2; //Endlage, aber eine Motor ist an
 
 	// TODO: handle more errors here
 	
